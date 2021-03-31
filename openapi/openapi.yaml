@@ -315,6 +315,12 @@ paths:
       summary: Retrieve a provenance check result.
       parameters:
         - $ref: "#/components/parameters/analysis_id"
+        - name: token
+          in: query
+          required: true
+          description: Token for query authentication
+          schema:
+            type: string
       responses:
         "200":
           description: Provenance report retrieved.
@@ -769,6 +775,12 @@ paths:
           in: path
           required: true
           description: Advise id returned on advise request.
+          schema:
+            type: string
+        - name: token
+          in: query
+          required: true
+          description: Token for query authentication
           schema:
             type: string
       responses:

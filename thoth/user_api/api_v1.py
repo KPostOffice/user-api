@@ -289,9 +289,14 @@ def post_provenance_python(
     parameters["whitelisted_sources"] = list(GRAPH.get_python_package_index_urls_all())
 
     force = parameters.pop("force", False)
-    cached_document_id = _compute_digest_params(
-        dict(**project.to_dict(), origin=origin, whitelisted_sources=parameters["whitelisted_sources"], debug=debug)
-    )
+    if authenticated:
+        cached_document_id = _compute_digest_params(
+            dict(**project.to_dict(), origin=origin, whitelisted_sources=parameters["whitelisted_sources"], debug=debug)
+        )
+    else:
+        cached_document_id = _compute_digest_params(
+            dict(**project.to_dict(), whitelisted_sources=parameters["whitelisted_sources"], debug=debug)
+        )
 
     timestamp_now = int(time.mktime(datetime.datetime.utcnow().timetuple()))
     cache = ProvenanceCacheStore()
@@ -323,14 +328,25 @@ def post_provenance_python(
     return response, status
 
 
-def get_provenance_python(analysis_id: str):
+def get_provenance_python(analysis_id: str, token: typing.Optional[str] = None):
     """Retrieve a provenance check result."""
-    return _get_document(
+    res = _get_document(
         ProvenanceResultsStore,
         analysis_id,
         name_prefix="provenance-checker-",
         namespace=Configuration.THOTH_BACKEND_NAMESPACE,
     )
+    authenticated = False
+    if token is not None:
+        if Configuration.API_TOKEN != token:
+            return {"error": "Bad token supplied"}, 401
+
+        authenticated = True
+    if authenticated or res[1] != 200:
+        return res
+    else:
+        res[0]["metadata"]["arguments"].pop("origin")
+        return res
 
 
 def get_provenance_python_log(analysis_id: str) -> typing.Tuple[typing.Dict[str, typing.Any], int]:
@@ -414,24 +430,37 @@ def post_advise_python(
     adviser_cache.connect()
 
     timestamp_now = int(time.mktime(datetime.datetime.utcnow().timetuple()))
-    cached_document_id = _compute_digest_params(
-        dict(
-            **project.to_dict(),
-            count=parameters["count"],
-            limit=parameters["limit"],
-            library_usage=parameters["library_usage"],
-            recommendation_type=recommendation_type,
-            origin=origin,
-            source_type=source_type.upper() if source_type else None,
-            dev=dev,
-            debug=parameters["debug"],
-            github_event_type=parameters["github_event_type"],
-            github_check_run_id=parameters["github_check_run_id"],
-            github_installation_id=parameters["github_installation_id"],
-            github_base_repo_url=parameters["github_base_repo_url"],
-            kebechet_metadata=parameters["kebechet_metadata"],
+    if authenticated:
+        cached_document_id = _compute_digest_params(
+            dict(
+                **project.to_dict(),
+                count=parameters["count"],
+                limit=parameters["limit"],
+                library_usage=parameters["library_usage"],
+                recommendation_type=recommendation_type,
+                origin=origin,
+                source_type=source_type.upper() if source_type else None,
+                dev=dev,
+                debug=parameters["debug"],
+                github_event_type=parameters["github_event_type"],
+                github_check_run_id=parameters["github_check_run_id"],
+                github_installation_id=parameters["github_installation_id"],
+                github_base_repo_url=parameters["github_base_repo_url"],
+                kebechet_metadata=parameters["kebechet_metadata"],
+            )
         )
-    )
+    else:
+        cached_document_id = _compute_digest_params(
+            dict(
+                **project.to_dict(),
+                count=parameters["count"],
+                limit=parameters["limit"],
+                library_usage=parameters["library_usage"],
+                recommendation_type=recommendation_type,
+                dev=dev,
+                debug=parameters["debug"],
+            )
+        )
 
     if not force:
         try:
@@ -469,11 +498,23 @@ def list_advise_python(page: int = 0):
     return _do_listing(AdvisersResultsStore, page)
 
 
-def get_advise_python(analysis_id):
+def get_advise_python(analysis_id: str, token: typing.Optional[str] = None):
     """Retrieve the given recommendation based on its id."""
-    return _get_document(
+    res = _get_document(
         AdvisersResultsStore, analysis_id, name_prefix="adviser-", namespace=Configuration.THOTH_BACKEND_NAMESPACE
     )
+    authenticated = False
+    if token is not None:
+        if Configuration.API_TOKEN != token:
+            return {"error": "Bad token supplied"}, 401
+
+        authenticated = True
+    if authenticated or res[1] != 200:
+        return res
+    else:
+        res[0]["metadata"]["arguments"].pop("origin")
+        res[0]["metadata"]["arguments"].pop("source_type")
+        return res
 
 
 def get_advise_python_log(analysis_id: str) -> typing.Tuple[typing.Dict[str, typing.Any], int]:
